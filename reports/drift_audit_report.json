@@ -1,0 +1,27 @@
+{
+  "overall_drift_detected": true,
+  "ks_p_value_threshold": 0.05,
+  "psi_alert_threshold": 0.2,
+  "baseline_samples": 500,
+  "buffered_samples": 500,
+  "features": {
+    "tenure": {
+      "ks_statistic": 0.0,
+      "p_value": 1.0,
+      "psi": 0.0,
+      "drift_detected": false
+    },
+    "MonthlyCharges": {
+      "ks_statistic": 0.328,
+      "p_value": 3.3583913478618886e-24,
+      "psi": 0.7243,
+      "drift_detected": true
+    },
+    "TotalCharges": {
+      "ks_statistic": 0.0,
+      "p_value": 1.0,
+      "psi": 0.0,
+      "drift_detected": false
+    }
+  }
+}
