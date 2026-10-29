@@ -1,0 +1,68 @@
+name: MLOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, MID_SEM, FINAL_SEM ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  continuous-integration-and-delivery:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Flake8 Static Code Analysis
+        run: |
+          flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 src/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=105 --statistics
+
+      - name: Materialize Benchmark Dataset for CI Runner
+        run: |
+          python -c "
+          from pathlib import Path
+          import numpy as np, pandas as pd
+          p = Path('data/churn.csv')
+          if not p.exists():
+              p.parent.mkdir(parents=True, exist_ok=True)
+              rng = np.random.default_rng(42)
+              n = 1200
+              tenure = rng.integers(1, 73, size=n)
+              monthly = np.round(rng.uniform(18.25, 118.75, size=n), 2)
+              total = np.round(tenure * monthly, 2)
+              churn = np.where((monthly > 75) & (tenure < 24), 'Yes', 'No')
+              pd.DataFrame({'tenure': tenure, 'MonthlyCharges': monthly, 'TotalCharges': total, 'Churn': churn}).to_csv(p, index=False)
+          "
+
+      - name: Execute Baseline Model Training (MLflow Registry)
+        run: |
+          python src/train.py
+
+      - name: Execute Synthetic Drift Stress Test & Recovery Benchmark
+        run: |
+          python -m src.simulate_drift
+
+      - name: Re-verify Baseline Model for Serving Gate
+        run: |
+          python src/train.py
+
+      - name: Run Automated Pytest Suite (Serving & Monitoring Gates)
+        run: |
+          pytest -v
+
+      - name: Build Reproducible Docker Image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/churn-service:${{ github.sha }} .
