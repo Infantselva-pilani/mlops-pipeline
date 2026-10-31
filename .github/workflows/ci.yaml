@@ -2,7 +2,7 @@ name: MLOps CI/CD Pipeline
 
 on:
   push:
-    branches: [ master, MID_SEM, FINAL_SEM ]
+    branches: [ master, MID_SEM, FINAL_SEM, feature_FINAL_SEM ]
   pull_request:
     branches: [ master ]
 
