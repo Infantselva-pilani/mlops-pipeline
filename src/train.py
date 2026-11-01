@@ -48,7 +48,7 @@ def run_training():
 
         mlflow.log_params(params)
         mlflow.log_metrics(metrics)
-        mlflow.sklearn.log_model(model, artifact_path="model")
+        mlflow.sklearn.log_model(model,name="model",skops_trusted_types=["sklearn.tree._tree.Tree"])
 
         print("--- Baseline Run Metrics ---")
         for metric_name, value in metrics.items():
