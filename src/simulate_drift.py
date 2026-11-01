@@ -117,7 +117,7 @@ def run_stress_test_and_recovery() -> dict:
             "drift_factor": "+35%_MonthlyCharges",
         })
         mlflow.log_metrics(stage_c_metrics)
-        mlflow.sklearn.log_model(retrained_clf, artifact_path="model")
+        mlflow.sklearn.log_model(retrained_clf,name="model",skops_trusted_types=["sklearn.tree._tree.Tree"])
 
     print("\n" + "=" * 86)
     print(" CHAPTER 6 BENCHMARK: SILENT DEGRADATION (+35% DRIFT) & AUTONOMOUS RECOVERY DELTA")
