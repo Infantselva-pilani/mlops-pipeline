@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import subprocess
 import pandas as pd
@@ -59,7 +60,7 @@ def run_drift_evaluation():
 
     if drift_detected:
         print("Drift detected! Triggering continuous retraining pipeline...")
-        subprocess.run(["python", "src/train.py"], check=True)
+        subprocess.run([sys.executable, "src/train.py"], check=True)
         return True
     else:
         print("All features stable. No retraining required.")

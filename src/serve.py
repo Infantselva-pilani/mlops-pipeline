@@ -29,11 +29,8 @@ async def lifespan(app: FastAPI):
         if runs:
             latest_run_id = runs[0].info.run_id
             model_uri = f"runs:/{latest_run_id}/model"
-            # Pass skops_trusted_types when loading model
-            model = mlflow.sklearn.load_model(
-                model_uri=model_uri,
-                skops_trusted_types=["sklearn.tree._tree.Tree"]
-            )
+            # MLflow automatically reads the trusted types from the logged artifact
+            model = mlflow.sklearn.load_model(model_uri=model_uri)
             print(f"Loaded model from run ID: {latest_run_id}")
     yield
     model = None
