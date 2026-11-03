@@ -1,0 +1,20 @@
+{
+  "tenure": {
+    "ks_stat": 0.0,
+    "p_value": 1.0,
+    "psi": 0.0,
+    "drift_status": "STABLE"
+  },
+  "MonthlyCharges": {
+    "ks_stat": 0.338,
+    "p_value": 1.0573527087082822e-25,
+    "psi": 0.7388,
+    "drift_status": "DRIFT DETECTED"
+  },
+  "TotalCharges": {
+    "ks_stat": 0.0,
+    "p_value": 1.0,
+    "psi": 0.0,
+    "drift_status": "STABLE"
+  }
+}

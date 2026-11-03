@@ -1,107 +1,71 @@
+import os
 from contextlib import asynccontextmanager
-from typing import Dict, Any
-from pathlib import Path
 import pandas as pd
-from pydantic import BaseModel, Field
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+import mlflow
 import mlflow.sklearn
-import joblib
 
-ml_models: Dict[str, Any] = {}
+model = None
 
 class ChurnRequest(BaseModel):
-    tenure: int = Field(..., ge=0, le=120, description="Months customer has stayed")
-    MonthlyCharges: float = Field(..., ge=0.0, description="Monthly billing amount")
-    TotalCharges: float = Field(..., ge=0.0, description="Total billed amount to date")
-
-def _load_artifact_safely(model_dir: Path):
-    """Safely loads model artifacts across skops, joblib, and MLflow."""
-    # 1. If serialized with skops, explicitly trust scikit-learn tree nodes
-    skops_path = model_dir / "model.skops"
-    if skops_path.exists():
-        try:
-            import skops.io
-            untrusted = skops.io.get_untrusted_types(file=str(skops_path))
-            trusted_types = list(set(untrusted + ["sklearn.tree._tree.Tree"]))
-            return skops.io.load(str(skops_path), trusted=trusted_types)
-        except Exception as e:
-            print(f"Direct skops loading failed: {e}. Trying alternatives...")
-
-    # 2. If serialized with standard joblib/pickle
-    pkl_path = model_dir / "model.pkl"
-    if pkl_path.exists():
-        return joblib.load(str(pkl_path))
-
-    # 3. Fallback: try MLflow loader with trusted types passed
-    try:
-        return mlflow.sklearn.load_model(str(model_dir), skops_trusted_types=["sklearn.tree._tree.Tree"])
-    except TypeError:
-        return mlflow.sklearn.load_model(str(model_dir))
+    tenure: int = Field(ge=0, le=120)
+    MonthlyCharges: float = Field(ge=0.0)
+    TotalCharges: float = Field(ge=0.0)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Connect to SQLite tracking store
+    global model
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    client = mlflow.tracking.MlflowClient()
+    experiment = client.get_experiment_by_name("Customer_Churn_Baseline")
     
-    # 2. Locate the latest run ID from MLflow
-    runs = mlflow.search_runs(
-        experiment_names=["Customer_Churn_Baseline"],
-        order_by=["start_time DESC"],
-        max_results=1
-    )
-    if runs.empty:
-        raise RuntimeError("No trained model found in MLflow database.")
-
-    latest_run_id = runs.iloc[0]["run_id"]
-    print(f"Targeting model from run: {latest_run_id}")
-
-    # 3. Resilient model loading
-    try:
-        model_uri = f"runs:/{latest_run_id}/model"
-        ml_models["model"] = mlflow.sklearn.load_model(
-            model_uri,
-            skops_trusted_types=["sklearn.tree._tree.Tree"]
+    if experiment:
+        runs = client.search_runs(
+            experiment_ids=[experiment.experiment_id],
+            order_by=["attribute.start_time DESC"],
+            max_results=1
         )
-    except Exception as e:
-        print(f"Standard URI resolution failed ({e}). Resolving via local mlruns directory...")
-        candidates = list(Path("mlruns").rglob("MLmodel"))
-        if not candidates:
-            raise RuntimeError("No MLmodel artifacts found inside the mlruns directory.")
-        
-        matching = [c.parent for c in candidates if latest_run_id in str(c)]
-        model_dir = matching[0] if matching else max(candidates, key=lambda p: p.stat().st_mtime).parent
-        
-        print(f"Loading model artifact directly from: {model_dir}")
-        ml_models["model"] = _load_artifact_safely(model_dir)
-
-    print("Model loaded successfully into memory.")
+        if runs:
+            latest_run_id = runs[0].info.run_id
+            model_uri = f"runs:/{latest_run_id}/model"
+            # MLflow automatically reads the trusted types from the logged artifact
+            model = mlflow.sklearn.load_model(model_uri=model_uri)
+            print(f"Loaded model from run ID: {latest_run_id}")
     yield
-    ml_models.clear()
+    model = None
 
-app = FastAPI(
-    title="Customer Churn Prediction Service",
-    description="MLOps Real-Time Inference Microservice",
-    version="1.0.0",
-    lifespan=lifespan
-)
+app = FastAPI(title="Telco Churn Prediction API", lifespan=lifespan)
+
+def append_to_inference_buffer(record: dict, prediction: int, probability: float):
+    buffer_path = os.path.join("data", "inference_buffer.csv")
+    df = pd.DataFrame([{
+        "tenure": record["tenure"],
+        "MonthlyCharges": record["MonthlyCharges"],
+        "TotalCharges": record["TotalCharges"],
+        "prediction": prediction,
+        "probability": probability
+    }])
+    df.to_csv(buffer_path, mode='a', header=not os.path.exists(buffer_path), index=False)
 
 @app.get("/health")
 def health():
-    if "model" in ml_models:
-        return {"status": "healthy", "model_loaded": True}
-    return {"status": "unhealthy", "model_loaded": False}
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    return {"status": "healthy", "model_loaded": True}
 
 @app.post("/predict")
 def predict(payload: ChurnRequest):
-    if "model" not in ml_models:
-        raise HTTPException(status_code=503, detail="Model artifact unavailable")
-
-    df = pd.DataFrame([payload.model_dump()])
-    prob = float(ml_models["model"].predict_proba(df)[0][1])
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model unavailable")
+    
+    data = pd.DataFrame([payload.model_dump()])
+    prob = float(model.predict_proba(data)[0][1])
     pred = int(prob >= 0.5)
-
+    
+    append_to_inference_buffer(payload.model_dump(), pred, prob)
+    
     return {
         "churn_prediction": pred,
-        "churn_probability": round(prob, 4),
-        "will_churn": bool(pred == 1)
+        "churn_probability": round(prob, 4)
     }

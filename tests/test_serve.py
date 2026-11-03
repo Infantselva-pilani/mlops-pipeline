@@ -37,12 +37,10 @@ def test_predict_valid_record(client):
     # Check expected keys exist
     assert "churn_prediction" in data
     assert "churn_probability" in data
-    assert "will_churn" in data
     
     # Mathematical bounds assertions
     assert data["churn_prediction"] in [0, 1]
     assert 0.0 <= data["churn_probability"] <= 1.0
-    assert isinstance(data["will_churn"], bool)
 
 # ---------------------------------------------------------------------------
 # Test 3: Input Validation Defense (Negative tenure)

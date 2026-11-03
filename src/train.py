@@ -1,58 +1,63 @@
+import os
 import pandas as pd
-import numpy as np
-import mlflow
-import mlflow.sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-
-# Explicitly connect to the SQLite backend database
-mlflow.set_tracking_uri("sqlite:///mlflow.db")
-mlflow.set_experiment("Customer_Churn_Baseline")
+import mlflow
+import mlflow.sklearn
 
 def run_training():
+    # Set tracking URI and experiment
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    mlflow.set_experiment("Customer_Churn_Baseline")
+
+    # Load dataset
+    data_path = os.path.join("data", "churn.csv")
+    df = pd.read_csv(data_path)
+
+    # Preprocessing
+    df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+    df.dropna(inplace=True)
+    df['Churn'] = df['Churn'].map({'Yes': 1, 'No': 0})
+
+    features = ['tenure', 'MonthlyCharges', 'TotalCharges']
+    X = df[features]
+    y = df['Churn']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
     with mlflow.start_run(run_name="rf_baseline"):
-        df = pd.read_csv("data/churn.csv")
-        
-        df['Churn'] = df['Churn'].map({'Yes': 1, 'No': 0})
-        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-        df = df.dropna()
-
-        features = ['tenure', 'MonthlyCharges', 'TotalCharges']
-        X = df[features]
-        y = df['Churn']
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
-
         params = {
             "n_estimators": 100,
             "max_depth": 5,
             "random_state": 42
         }
-        
         model = RandomForestClassifier(**params)
         model.fit(X_train, y_train)
 
-        preds = model.predict(X_test)
-        probs = model.predict_proba(X_test)[:, 1]
+        y_pred = model.predict(X_test)
+        y_prob = model.predict_proba(X_test)[:, 1]
 
         metrics = {
-            "accuracy": accuracy_score(y_test, preds),
-            "precision": precision_score(y_test, preds),
-            "recall": recall_score(y_test, preds),
-            "f1_score": f1_score(y_test, preds),
-            "roc_auc": roc_auc_score(y_test, probs)
+            "accuracy": accuracy_score(y_test, y_pred),
+            "precision": precision_score(y_test, y_pred),
+            "recall": recall_score(y_test, y_pred),
+            "f1_score": f1_score(y_test, y_pred),
+            "roc_auc": roc_auc_score(y_test, y_prob)
         }
 
         mlflow.log_params(params)
         mlflow.log_metrics(metrics)
-        mlflow.sklearn.log_model(model, artifact_path="model")
 
-        print("--- Baseline Run Metrics ---")
-        for metric_name, value in metrics.items():
-            print(f"{metric_name}: {value:.4f}")
+        # Log model with skops_trusted_types fix and non-deprecated argument
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            name="model",
+            skops_trusted_types=["sklearn.tree._tree.Tree"]
+        )
+        print("Training completed and model logged successfully.")
 
 if __name__ == "__main__":
     run_training()
