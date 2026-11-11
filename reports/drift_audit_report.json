@@ -2,26 +2,26 @@
   "overall_drift_detected": true,
   "ks_p_value_threshold": 0.05,
   "psi_alert_threshold": 0.2,
-  "baseline_samples": 500,
-  "buffered_samples": 500,
+  "baseline_samples": 7032,
+  "buffered_samples": 1407,
   "features": {
     "tenure": {
-      "ks_statistic": 0.0,
-      "p_value": 1.0,
-      "psi": 0.0,
+      "ks_statistic": 0.0275,
+      "p_value": 0.33182358021829944,
+      "psi": 0.0048,
       "drift_detected": false
     },
     "MonthlyCharges": {
-      "ks_statistic": 0.328,
-      "p_value": 3.3583913478618886e-24,
-      "psi": 0.7243,
+      "ks_statistic": 0.3285,
+      "p_value": 9.339403611705662e-113,
+      "psi": 1.9435,
       "drift_detected": true
     },
     "TotalCharges": {
-      "ks_statistic": 0.0,
-      "p_value": 1.0,
-      "psi": 0.0,
-      "drift_detected": false
+      "ks_statistic": 0.0975,
+      "p_value": 3.7320183406617003e-10,
+      "psi": 0.0894,
+      "drift_detected": true
     }
   }
 }
